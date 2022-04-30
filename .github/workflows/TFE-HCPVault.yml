@@ -83,4 +83,4 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ steps.secrets.outputs.ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ steps.secrets.SECRET_ACCESS_KEY }}
-      run: terraform apply -auto-approve -var 'AWS_ACCESS_KEY_ID="${{ steps.secrets.outputs.ACCESS_KEY_ID }}" -var 'AWS_SECRET_ACCESS_KEY="${{ steps.secrets.SECRET_ACCESS_KEY }}"'
+      run: terraform apply -auto-approve -var 'AWS_ACCESS_KEY_ID="${{ steps.secrets.outputs.ACCESS_KEY_ID }}"' -var 'AWS_SECRET_ACCESS_KEY="${{ steps.secrets.SECRET_ACCESS_KEY }}"'
