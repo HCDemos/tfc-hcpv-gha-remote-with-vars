@@ -77,15 +77,10 @@ jobs:
       if: steps.plan.outcome == 'failure'
       run: exit 1
   
-    - name: Terraform Cloud Run
-      uses: kvrhdn/tfe-run@v1
-      id: tfe-run
-      with:
-          token: ${{ steps.secrets.outputs.TFC_API_TOKEN }}
-          workspace: tfc-api-hcpvault-ghactions
-          type: apply
-          message: |
-            Run triggered using tfe-run (commit: ${{ github.SHA }})
-          tf-vars: |
-            AWS_ACCESS_KEY_ID = "${{ steps.secrets.outputs.ACCESS_KEY_ID }}"
-            AWS_SECRET_ACCESS_KEY = "${{ steps.secrets.outputs.SECRET_ACCESS_KEY }}"
+    - name: Terraform Apply
+      id: apply
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ steps.secrets.outputs.ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ steps.secrets.SECRET_ACCESS_KEY }}
+      run: terraform apply -auto-approve
