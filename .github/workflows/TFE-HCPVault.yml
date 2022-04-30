@@ -1,0 +1,91 @@
+name: TF-HCPVault
+# Run this workflow every time a new commit pushed to your repository
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Import Secrets
+      id: secrets
+      uses: hashicorp/vault-action@v2.4.0
+      with:
+          url: https://dp-vault-cluster.vault.1e53275e-94b7-4575-b679-735c6df54970.aws.hashicorp.cloud:8200
+          tlsSkipVerify: true
+          namespace: admin
+          method: approle
+          roleId: ${{ secrets.VAULT_ROLE_ID }}
+          secretId: ${{ secrets.VAULT_SECRET_ID }}
+          secrets: |
+            tfc-dev-deployments/creds/dev-role token | TFC_API_TOKEN;
+            aws/creds/ec2-iam-user-role access_key | ACCESS_KEY_ID;
+            aws/creds/ec2-iam-user-role secret_key | SECRET_ACCESS_KEY
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+          terraform_version: 1.1.7
+          cli_config_credentials_token: ${{ steps.secrets.outputs.TFC_API_TOKEN }}
+
+    - name: Terraform Format
+      id: fmt
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      id: init
+      env:
+        AWS_ACCESS_KEY_ID: ${{ steps.secrets.outputs.ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ steps.secrets.SECRET_ACCESS_KEY }}
+      run: terraform init
+      
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      env:
+        AWS_ACCESS_KEY_ID: ${{ steps.secrets.outputs.ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ steps.secrets.SECRET_ACCESS_KEY }}
+      if: github.event_name == 'pull_request'
+      run: terraform plan -no-color
+      continue-on-error: true
+
+    - uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            <details><summary>Show Plan</summary>
+            \`\`\`\n
+            ${process.env.PLAN}
+            \`\`\`
+            </details>
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+    - name: Terraform Plan Status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+  
+    - name: Terraform Cloud Run
+      uses: kvrhdn/tfe-run@v1
+      id: tfe-run
+      with:
+          token: ${{ steps.secrets.outputs.TFC_API_TOKEN }}
+          workspace: tfc-api-hcpvault-ghactions
+          type: apply
+          message: |
+            Run triggered using tfe-run (commit: ${{ github.SHA }})
+          tf-vars: |
+            AWS_ACCESS_KEY_ID = "${{ steps.secrets.outputs.ACCESS_KEY_ID }}"
+            AWS_SECRET_ACCESS_KEY = "${{ steps.secrets.outputs.SECRET_ACCESS_KEY }}"
