@@ -13,7 +13,7 @@ terraform {
   cloud {
     organization = "HCDemos"
     workspaces {
-      name = "tfc-api-hcpvault-ghactions"
+      name = "tfc-hcpv-gha-remote-with-vars"
     }
   }
 }
